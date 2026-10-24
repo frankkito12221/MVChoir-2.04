@@ -1,0 +1,44 @@
+name: Build MV CHOIR LAB
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build effect (MV CHOIR LAB)
+        run: cmake --build build --config Release --target MVChoirLab_VST3 --parallel
+
+      - name: Build instrument (MV CHOIR LAB KEYS)
+        continue-on-error: true
+        run: cmake --build build --config Release --target MVChoirLabKeys_VST3 --parallel
+
+      - name: Build MV MAP
+        continue-on-error: true
+        run: cmake --build build --config Release --target MVMap_VST3 --parallel
+
+      - name: Collect single-file plugins
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $fx = Get-ChildItem -Path build -Recurse -File -Filter "MV CHOIR LAB.vst3" | Select-Object -First 1
+          if ($fx) { Copy-Item $fx.FullName "dist/MV CHOIR LAB.vst3" }
+          $keys = Get-ChildItem -Path build -Recurse -File -Filter "MV CHOIR LAB KEYS.vst3" | Select-Object -First 1
+          if ($keys) { Copy-Item $keys.FullName "dist/MV CHOIR LAB KEYS.vst3" }
+          $map = Get-ChildItem -Path build -Recurse -File -Filter "MV MAP.vst3" | Select-Object -First 1
+          if ($map) { Copy-Item $map.FullName "dist/MV MAP.vst3" }
+          Get-ChildItem dist | Select-Object Name, Length
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MV-CHOIR-LAB-Windows
+          path: dist
