@@ -7,11 +7,27 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
+
     steps:
       - uses: actions/checkout@v4
 
+      - name: Detect project directory
+        id: project
+        shell: pwsh
+        run: |
+          if (Test-Path "CMakeLists.txt") {
+            "source_dir=." >> $env:GITHUB_OUTPUT
+          }
+          elseif (Test-Path "MVChoirLab/CMakeLists.txt") {
+            "source_dir=MVChoirLab" >> $env:GITHUB_OUTPUT
+          }
+          else {
+            Write-Error "No se encontró CMakeLists.txt en la raíz ni en MVChoirLab/"
+            exit 1
+          }
+
       - name: Configure
-        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+        run: cmake -S "${{ steps.project.outputs.source_dir }}" -B build -G "Visual Studio 17 2022" -A x64
 
       - name: Build effect (MV CHOIR LAB)
         run: cmake --build build --config Release --target MVChoirLab_VST3 --parallel
@@ -24,21 +40,25 @@ jobs:
         continue-on-error: true
         run: cmake --build build --config Release --target MVMap_VST3 --parallel
 
-      - name: Collect single-file plugins
+      - name: Collect plugins
         if: always()
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          $fx = Get-ChildItem -Path build -Recurse -File -Filter "MV CHOIR LAB.vst3" | Select-Object -First 1
+
+          $fx = Get-ChildItem -Path build -Recurse -File -Filter "MV CHOIR LAB.vst3" -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($fx) { Copy-Item $fx.FullName "dist/MV CHOIR LAB.vst3" }
-          $keys = Get-ChildItem -Path build -Recurse -File -Filter "MV CHOIR LAB KEYS.vst3" | Select-Object -First 1
+
+          $keys = Get-ChildItem -Path build -Recurse -File -Filter "MV CHOIR LAB KEYS.vst3" -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($keys) { Copy-Item $keys.FullName "dist/MV CHOIR LAB KEYS.vst3" }
-          $map = Get-ChildItem -Path build -Recurse -File -Filter "MV MAP.vst3" | Select-Object -First 1
+
+          $map = Get-ChildItem -Path build -Recurse -File -Filter "MV MAP.vst3" -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($map) { Copy-Item $map.FullName "dist/MV MAP.vst3" }
+
           Get-ChildItem dist | Select-Object Name, Length
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: MV-CHOIR-LAB-Windows
-          path: dist
+          path: dist/
